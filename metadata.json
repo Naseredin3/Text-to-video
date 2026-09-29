@@ -1,0 +1,6 @@
+{
+  "name": "Veo Dialogue Studio",
+  "description": "Cinematic AI video and dialogue generation studio powered by Veo 3.1 (veo-3.1-generate-preview) with real-time operation polling, local MP4 downloads, and script library.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

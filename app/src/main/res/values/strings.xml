@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">Veo Dialogue Studio</string>
+    <string name="studio_subtitle">Veo 3.1 Cinematic Video &amp; Dialogue Generator</string>
+    <string name="tab_director">Director Studio</string>
+    <string name="tab_vault">Takes Vault</string>
+    <string name="tab_code">SDK &amp; Telemetry</string>
+    <string name="prompt_label">Scene &amp; Dialogue Prompt</string>
+    <string name="prompt_placeholder">Describe camera framing, lighting, and character dialogue in single quotes…</string>
+    <string name="generate_video_cta">Generate Video (veo-3.1)</string>
+    <string name="cancel_operation_cta">Cancel Polling</string>
+    <string name="enhance_prompt_cta">AI Polish Dialogue</string>
+    <string name="reset_default_prompt">Restore Cryptic Wall Prompt</string>
+    <string name="add_dialogue_line">Add Dialogue Cue</string>
+    <string name="output_filename_label">Output Download Path</string>
+    <string name="aspect_ratio_label">Aspect Ratio</string>
+    <string name="resolution_label">Resolution</string>
+    <string name="model_label">Veo Model</string>
+    <string name="telemetry_console_title">Live Operation Telemetry</string>
+    <string name="empty_vault_title">No Generated Takes Yet</string>
+    <string name="empty_vault_subtitle">Generate your first Veo 3.1 dialogue video from the Director Studio tab. Completed takes and local MP4 files will appear here.</string>
+    <string name="security_prototype_notice">Prototype Notice: Uses BuildConfig.GEMINI_API_KEY configured via the AI Studio Secrets panel. Do not share this APK publicly.</string>
+    <string name="export_movies_success">Saved MP4 to device Movies folder</string>
+    <string name="hero_banner_desc">Cryptic drawing on a stone wall illuminated by flickering torchlight</string>
+</resources>
