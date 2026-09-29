@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.MovieCreation
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Terminal
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +59,8 @@ import com.example.R
 import com.example.data.local.VideoGenerationEntity
 import com.example.ui.components.CinemaMonitorCard
 import com.example.ui.components.DialogueComposerSection
+import com.example.ui.components.PermanentApiKeyBanner
+import com.example.ui.components.PermanentApiKeyDialog
 import com.example.ui.theme.EmeraldReady
 import com.example.ui.theme.TorchAmber
 import com.example.ui.viewmodel.StudioTab
@@ -111,6 +115,26 @@ fun VeoStudioScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
+                    }
+                },
+                actions = {
+                    FilledTonalButton(
+                        onClick = { viewModel.openApiKeyDialog() },
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .testTag("api_key_settings_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Key,
+                            contentDescription = "API Key Settings",
+                            tint = if (uiState.isApiKeyConfigured) EmeraldReady else TorchAmber,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (uiState.isApiKeyConfigured) "کلید فعال" else "کلید API",
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -185,11 +209,28 @@ fun VeoStudioScreen(
             }
         }
     ) { innerPadding ->
+        if (uiState.showApiKeyDialog) {
+            PermanentApiKeyDialog(
+                isConfigured = uiState.isApiKeyConfigured,
+                maskedKey = uiState.maskedApiKey,
+                onDismiss = { viewModel.closeApiKeyDialog() },
+                onSaveKey = { viewModel.savePermanentApiKey(it) },
+                onClearKey = { viewModel.clearPermanentApiKey() }
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            PermanentApiKeyBanner(
+                isConfigured = uiState.isApiKeyConfigured,
+                maskedKey = uiState.maskedApiKey,
+                onOpenDialog = { viewModel.openApiKeyDialog() },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+            )
+
             // Feedback / Error Banner
             AnimatedVisibility(visible = uiState.bannerMessage != null || uiState.errorBanner != null) {
                 val isError = uiState.errorBanner != null

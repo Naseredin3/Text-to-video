@@ -66,7 +66,9 @@ data class StudioUiState(
     val selectedTake: VideoGenerationEntity? = null,
     val bannerMessage: String? = null,
     val errorBanner: String? = null,
-    val isApiKeyConfigured: Boolean = true
+    val isApiKeyConfigured: Boolean = true,
+    val maskedApiKey: String = "Not Set",
+    val showApiKeyDialog: Boolean = false
 )
 
 class StudioViewModel(
@@ -74,7 +76,10 @@ class StudioViewModel(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        StudioUiState(isApiKeyConfigured = repository.isApiKeyConfigured())
+        StudioUiState(
+            isApiKeyConfigured = repository.isApiKeyConfigured(),
+            maskedApiKey = repository.getMaskedKeyPreview()
+        )
     )
     val uiState: StateFlow<StudioUiState> = _uiState.asStateFlow()
 
@@ -211,9 +216,58 @@ class StudioViewModel(
         _uiState.update { it.copy(bannerMessage = null, errorBanner = null) }
     }
 
+    fun openApiKeyDialog() {
+        _uiState.update { it.copy(showApiKeyDialog = true) }
+    }
+
+    fun closeApiKeyDialog() {
+        _uiState.update { it.copy(showApiKeyDialog = false) }
+    }
+
+    fun savePermanentApiKey(rawKey: String) {
+        val cleaned = rawKey.trim()
+        if (cleaned.isBlank()) {
+            _uiState.update { it.copy(errorBanner = "لطفاً یک کلید API معتبر وارد کنید.") }
+            return
+        }
+        repository.savePermanentApiKey(cleaned)
+        _uiState.update {
+            it.copy(
+                isApiKeyConfigured = repository.isApiKeyConfigured(),
+                maskedApiKey = repository.getMaskedKeyPreview(),
+                showApiKeyDialog = false,
+                errorBanner = null,
+                bannerMessage = "کلید API با موفقیت به صورت دائمی در حافظه برنامه ذخیره شد."
+            )
+        }
+        appendLog("Permanent Gemini API Key saved (${repository.getMaskedKeyPreview()}).", isSuccess = true)
+    }
+
+    fun clearPermanentApiKey() {
+        repository.clearSavedApiKey()
+        _uiState.update {
+            it.copy(
+                isApiKeyConfigured = repository.isApiKeyConfigured(),
+                maskedApiKey = repository.getMaskedKeyPreview(),
+                showApiKeyDialog = false,
+                bannerMessage = "کلید سفارشی پاک شد."
+            )
+        }
+        appendLog("Cleared custom saved API key.")
+    }
+
     fun polishPromptWithAi() {
         val currentPrompt = _uiState.value.prompt.trim()
         if (currentPrompt.isBlank() || _uiState.value.isPolishingPrompt) return
+        if (!repository.isApiKeyConfigured()) {
+            _uiState.update {
+                it.copy(
+                    showApiKeyDialog = true,
+                    errorBanner = "لطفاً کلید Gemini API خود را یک‌بار وارد کنید تا به صورت دائمی ذخیره شود."
+                )
+            }
+            return
+        }
 
         _uiState.update { it.copy(isPolishingPrompt = true, errorBanner = null, bannerMessage = null) }
         appendLog("Polishing dialogue script with gemini-3.5-flash...")
@@ -249,6 +303,15 @@ class StudioViewModel(
         if (state.isGenerating) return
         if (state.prompt.isBlank()) {
             _uiState.update { it.copy(errorBanner = "Please enter a scene & dialogue prompt before generating.") }
+            return
+        }
+        if (!repository.isApiKeyConfigured()) {
+            _uiState.update {
+                it.copy(
+                    showApiKeyDialog = true,
+                    errorBanner = "کلید API تنظیم نشده است. لطفاً کلید خود را وارد کنید تا به صورت دائمی ذخیره شود."
+                )
+            }
             return
         }
 

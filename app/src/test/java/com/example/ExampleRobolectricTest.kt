@@ -2,11 +2,13 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.local.ApiKeyManager
 import com.example.data.remote.VeoOperationParser
 import com.example.data.repository.VideoRepository
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,6 +26,20 @@ class ExampleRobolectricTest {
         assertEquals("Veo Dialogue Studio", appName)
         assertTrue(VideoRepository.DEFAULT_CRYPTIC_WALL_PROMPT.contains("This must be it. That's the secret code."))
         assertTrue(VideoRepository.DEFAULT_CRYPTIC_WALL_PROMPT.contains("What did you find?"))
+    }
+
+    @Test
+    fun `save and retrieve permanent Gemini API key via ApiKeyManager`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val manager = ApiKeyManager(context)
+        manager.clearSavedApiKey()
+
+        manager.savePermanentApiKey("AIzaSyTestPermanentKey123456789")
+        assertTrue(manager.hasValidApiKey())
+        assertEquals("AIzaSyTestPermanentKey123456789", manager.getActiveApiKey())
+
+        manager.clearSavedApiKey()
+        assertFalse(manager.hasCustomSavedKey())
     }
 
     @Test

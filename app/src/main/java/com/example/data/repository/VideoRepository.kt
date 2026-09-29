@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import com.example.BuildConfig
+import com.example.data.local.ApiKeyManager
 import com.example.data.local.VideoGenerationDao
 import com.example.data.local.VideoGenerationEntity
 import com.example.data.remote.Content
@@ -49,6 +50,7 @@ class VideoRepository(
     private val dao: VideoGenerationDao,
     private val appContext: Context
 ) {
+    private val apiKeyManager = ApiKeyManager(appContext)
     val allGenerations: Flow<List<VideoGenerationEntity>> = dao.getAllGenerations()
 
     suspend fun deleteGeneration(id: Long) {
@@ -59,9 +61,18 @@ class VideoRepository(
         dao.deleteGenerationById(id)
     }
 
-    fun isApiKeyConfigured(): Boolean {
-        val key = BuildConfig.GEMINI_API_KEY
-        return key.isNotBlank() && key != "MY_GEMINI_API_KEY" && key != "null"
+    fun isApiKeyConfigured(): Boolean = apiKeyManager.hasValidApiKey()
+
+    fun getActiveApiKey(): String = apiKeyManager.getActiveApiKey()
+
+    fun getMaskedKeyPreview(): String = apiKeyManager.getMaskedKeyPreview()
+
+    fun savePermanentApiKey(apiKey: String) {
+        apiKeyManager.savePermanentApiKey(apiKey)
+    }
+
+    fun clearSavedApiKey() {
+        apiKeyManager.clearSavedApiKey()
     }
 
     /**
@@ -81,10 +92,10 @@ class VideoRepository(
         onLog: (String) -> Unit,
         onPollProgress: (pollCount: Int, secondsUntilNextPoll: Int, elapsedSeconds: Int, operationName: String) -> Unit
     ): Result<VideoGenerationEntity> = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY
-        if (!isApiKeyConfigured()) {
+        val apiKey = apiKeyManager.getActiveApiKey()
+        if (!apiKeyManager.hasValidApiKey()) {
             val missingKeyMsg =
-                "GEMINI_API_KEY is not configured. Please add your Gemini API key in the AI Studio Secrets panel."
+                "کلید API تنظیم نشده است. لطفاً کلید Gemini API خود را در بخش «تنظیم دائمی کلید API» بالای صفحه وارد و ذخیره کنید."
             onLog("ERROR: $missingKeyMsg")
             return@withContext Result.failure(IllegalStateException(missingKeyMsg))
         }
@@ -238,9 +249,10 @@ class VideoRepository(
      * Uses gemini-3.5-flash to polish a scene description & spoken dialogue prompt for Veo 3.1.
      */
     suspend fun polishDialoguePrompt(rawPrompt: String): Result<String> = withContext(Dispatchers.IO) {
-        if (!isApiKeyConfigured()) {
+        val activeKey = apiKeyManager.getActiveApiKey()
+        if (!apiKeyManager.hasValidApiKey()) {
             return@withContext Result.failure(
-                IllegalStateException("Configure GEMINI_API_KEY in the AI Studio Secrets panel to use AI Prompt Polishing.")
+                IllegalStateException("لطفاً ابتدا کلید Gemini API را در بخش «تنظیم دائمی کلید API» وارد و ذخیره کنید.")
             )
         }
         try {
@@ -263,7 +275,7 @@ class VideoRepository(
                 systemInstruction = systemInstruction
             )
             val response = VeoRetrofitClient.service.generateContent(
-                apiKey = BuildConfig.GEMINI_API_KEY,
+                apiKey = activeKey,
                 request = request
             )
             val text = response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
