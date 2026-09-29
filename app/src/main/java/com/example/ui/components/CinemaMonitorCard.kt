@@ -69,6 +69,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.R
 import com.example.data.local.VideoGenerationEntity
 import com.example.ui.theme.EmeraldReady
+import com.example.ui.theme.LocalAppStrings
 import com.example.ui.theme.TorchAmber
 import java.io.File
 import java.util.Locale
@@ -90,6 +91,7 @@ fun CinemaMonitorCard(
     onExportTake: (VideoGenerationEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val existingVideoFile = remember(selectedTake?.localFilePath) {
         selectedTake?.localFilePath?.let { path ->
             val file = File(path)
@@ -135,9 +137,11 @@ fun CinemaMonitorCard(
                     )
                     Text(
                         text = when {
-                            isGenerating -> "POLLING OPERATION"
-                            existingVideoFile != null -> "PLAYBACK READY • ${selectedTake?.downloadPath ?: currentDownloadPath}"
-                            else -> "DIRECTOR MONITOR • STANDBY"
+                            isGenerating -> strings.monitorPollingStatus
+                            existingVideoFile != null -> strings.monitorPlaybackReady(
+                                selectedTake?.downloadPath ?: currentDownloadPath
+                            )
+                            else -> strings.monitorStandby
                         },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface
@@ -200,7 +204,6 @@ fun CinemaMonitorCard(
                             .testTag("veo_video_player")
                     )
 
-                    // Floating corner playback & export controls
                     Row(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -240,7 +243,6 @@ fun CinemaMonitorCard(
                         }
                     }
                 } else {
-                    // Hero illustration backdrop with dark vignette
                     Image(
                         painter = painterResource(id = R.drawable.img_cryptic_wall_hero_1790694695092),
                         contentDescription = stringResource(R.string.hero_banner_desc),
@@ -263,7 +265,6 @@ fun CinemaMonitorCard(
                     )
 
                     if (isGenerating) {
-                        // Active Veo 3.1 Long-Running Operation Polling Overlay
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -288,7 +289,7 @@ fun CinemaMonitorCard(
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Text(
-                                        text = "ai.operations.getVideosOperation • Poll #$pollCount",
+                                        text = "getVideosOperation • #$pollCount",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
@@ -298,7 +299,7 @@ fun CinemaMonitorCard(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Text(
-                                text = "Waiting for video generation to complete...",
+                                text = strings.waitingForVideoMsg,
                                 style = MaterialTheme.typography.titleMedium,
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold
@@ -307,7 +308,10 @@ fun CinemaMonitorCard(
                             Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
-                                text = "Elapsed: ${formatElapsed(elapsedSeconds)} • Next 10s check in ${secondsUntilNextPoll}s",
+                                text = strings.elapsedAndNextPoll(
+                                    formatElapsed(elapsedSeconds),
+                                    secondsUntilNextPoll
+                                ),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -315,7 +319,7 @@ fun CinemaMonitorCard(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             LinearProgressIndicator(
-                                progress = { (10 - secondsUntilNextPoll).coerceIn(0, 10) / 10f },
+                                progress = { (10 - secondsUntilNextPoll.coerceIn(0, 10)) / 10f },
                                 modifier = Modifier
                                     .fillMaxWidth(0.75f)
                                     .height(6.dp)
@@ -340,11 +344,10 @@ fun CinemaMonitorCard(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = stringResource(R.string.cancel_operation_cta))
+                                Text(text = strings.cancelPollingCta)
                             }
                         }
                     } else {
-                        // Standby Viewfinder Overlay
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -404,7 +407,7 @@ fun CinemaMonitorCard(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Target output: $currentDownloadPath",
+                                        text = strings.targetOutputLabel(currentDownloadPath),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = Color.White.copy(alpha = 0.8f)
                                     )
@@ -424,7 +427,7 @@ fun CinemaMonitorCard(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Roll Camera",
+                                            text = strings.rollCameraCta,
                                             style = MaterialTheme.typography.labelLarge
                                         )
                                     }
@@ -435,7 +438,6 @@ fun CinemaMonitorCard(
                 }
             }
 
-            // Active Operation Name Footer when polling or completed
             AnimatedVisibility(visible = activeOperationName.isNotBlank() || selectedTake != null) {
                 Row(
                     modifier = Modifier

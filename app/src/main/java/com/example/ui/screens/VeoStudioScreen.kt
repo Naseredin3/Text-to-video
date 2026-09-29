@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -24,6 +23,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MovieCreation
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Terminal
@@ -40,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,18 +51,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.R
 import com.example.data.local.VideoGenerationEntity
 import com.example.ui.components.CinemaMonitorCard
 import com.example.ui.components.DialogueComposerSection
 import com.example.ui.components.PermanentApiKeyBanner
 import com.example.ui.components.PermanentApiKeyDialog
+import com.example.ui.theme.AppLanguage
 import com.example.ui.theme.EmeraldReady
+import com.example.ui.theme.LocalAppStrings
 import com.example.ui.theme.TorchAmber
 import com.example.ui.viewmodel.StudioTab
 import com.example.ui.viewmodel.StudioUiState
@@ -75,6 +76,7 @@ fun VeoStudioScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val savedGenerations by viewModel.savedGenerations.collectAsStateWithLifecycle()
+    val strings = LocalAppStrings.current
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -102,13 +104,13 @@ fun VeoStudioScreen(
                         }
                         Column {
                             Text(
-                                text = stringResource(R.string.app_name),
+                                text = strings.appTitle,
                                 style = MaterialTheme.typography.titleLarge,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = stringResource(R.string.studio_subtitle),
+                                text = strings.studioSubtitle,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -118,8 +120,31 @@ fun VeoStudioScreen(
                     }
                 },
                 actions = {
+                    // Language Toggle Button (FA | EN)
+                    OutlinedButton(
+                        onClick = { viewModel.toggleLanguage() },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .padding(end = 6.dp)
+                            .testTag("language_toggle_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = "Switch Language",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (uiState.language == AppLanguage.FA) "FA | EN" else "EN | فارسی",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Permanent API Key Button
                     FilledTonalButton(
                         onClick = { viewModel.openApiKeyDialog() },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         modifier = Modifier
                             .padding(end = 8.dp)
                             .testTag("api_key_settings_button")
@@ -130,9 +155,9 @@ fun VeoStudioScreen(
                             tint = if (uiState.isApiKeyConfigured) EmeraldReady else TorchAmber,
                             modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = if (uiState.isApiKeyConfigured) "کلید فعال" else "کلید API",
+                            text = if (uiState.isApiKeyConfigured) strings.apiKeyActiveBtn else strings.apiKeySetBtn,
                             style = MaterialTheme.typography.labelMedium
                         )
                     }
@@ -158,10 +183,10 @@ fun VeoStudioScreen(
                             } else {
                                 Icons.Outlined.MovieCreation
                             },
-                            contentDescription = stringResource(R.string.tab_director)
+                            contentDescription = strings.tabDirector
                         )
                     },
-                    label = { Text(stringResource(R.string.tab_director)) },
+                    label = { Text(strings.tabDirector) },
                     modifier = Modifier.testTag("nav_tab_director")
                 )
 
@@ -182,11 +207,11 @@ fun VeoStudioScreen(
                                 } else {
                                     Icons.Outlined.VideoLibrary
                                 },
-                                contentDescription = stringResource(R.string.tab_vault)
+                                contentDescription = strings.tabVault
                             )
                         }
                     },
-                    label = { Text(stringResource(R.string.tab_vault)) },
+                    label = { Text(strings.tabVault) },
                     modifier = Modifier.testTag("nav_tab_vault")
                 )
 
@@ -200,10 +225,10 @@ fun VeoStudioScreen(
                             } else {
                                 Icons.Outlined.Terminal
                             },
-                            contentDescription = stringResource(R.string.tab_code)
+                            contentDescription = strings.tabCode
                         )
                     },
-                    label = { Text(stringResource(R.string.tab_code)) },
+                    label = { Text(strings.tabCode) },
                     modifier = Modifier.testTag("nav_tab_telemetry")
                 )
             }
@@ -213,8 +238,9 @@ fun VeoStudioScreen(
             PermanentApiKeyDialog(
                 isConfigured = uiState.isApiKeyConfigured,
                 maskedKey = uiState.maskedApiKey,
+                initialBackupKey = uiState.savedBackupKey,
                 onDismiss = { viewModel.closeApiKeyDialog() },
-                onSaveKey = { viewModel.savePermanentApiKey(it) },
+                onSaveKey = { primary, backup -> viewModel.savePermanentApiKey(primary, backup) },
                 onClearKey = { viewModel.clearPermanentApiKey() }
             )
         }
@@ -231,7 +257,6 @@ fun VeoStudioScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
             )
 
-            // Feedback / Error Banner
             AnimatedVisibility(visible = uiState.bannerMessage != null || uiState.errorBanner != null) {
                 val isError = uiState.errorBanner != null
                 val text = uiState.errorBanner ?: uiState.bannerMessage.orEmpty()
@@ -331,7 +356,6 @@ private fun DirectorStudioContent(
         val isExpanded = maxWidth >= 760.dp
 
         if (isExpanded) {
-            // Adaptive Two-Pane Layout for Tablets / Foldables / Landscape
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -386,6 +410,7 @@ private fun DirectorStudioContent(
                             onRemoveDialogueCue = { viewModel.removeDialogueCue(it) },
                             onAppendCameraKeyword = { viewModel.appendCameraKeyword(it) },
                             onModelChange = { viewModel.updateModel(it) },
+                            onAutoFallback429Change = { viewModel.setAutoFallback429(it) },
                             onAspectRatioChange = { viewModel.updateAspectRatio(it) },
                             onResolutionChange = { viewModel.updateResolution(it) },
                             onDownloadPathChange = { viewModel.updateDownloadPath(it) },
@@ -395,7 +420,6 @@ private fun DirectorStudioContent(
                 }
             }
         } else {
-            // Mobile Single-Column Layout
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -442,6 +466,7 @@ private fun DirectorStudioContent(
                         onRemoveDialogueCue = { viewModel.removeDialogueCue(it) },
                         onAppendCameraKeyword = { viewModel.appendCameraKeyword(it) },
                         onModelChange = { viewModel.updateModel(it) },
+                        onAutoFallback429Change = { viewModel.setAutoFallback429(it) },
                         onAspectRatioChange = { viewModel.updateAspectRatio(it) },
                         onResolutionChange = { viewModel.updateResolution(it) },
                         onDownloadPathChange = { viewModel.updateDownloadPath(it) },
@@ -464,6 +489,7 @@ private fun CompactTelemetryStrip(
     onOpenFullConsole: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     val latestLog = uiState.consoleLogs.lastOrNull()
     Surface(
         onClick = onOpenFullConsole,
@@ -503,7 +529,7 @@ private fun CompactTelemetryStrip(
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "SDK Logs ->",
+                text = strings.sdkLogsLink,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
@@ -514,6 +540,7 @@ private fun CompactTelemetryStrip(
 
 @Composable
 private fun PrototypeSecurityNotice(modifier: Modifier = Modifier) {
+    val strings = LocalAppStrings.current
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
@@ -532,7 +559,7 @@ private fun PrototypeSecurityNotice(modifier: Modifier = Modifier) {
                 modifier = Modifier.size(18.dp)
             )
             Text(
-                text = stringResource(R.string.security_prototype_notice),
+                text = strings.securityNoticeText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

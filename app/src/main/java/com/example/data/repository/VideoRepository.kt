@@ -5,7 +5,6 @@ import android.content.Context
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import com.example.BuildConfig
 import com.example.data.local.ApiKeyManager
 import com.example.data.local.VideoGenerationDao
 import com.example.data.local.VideoGenerationEntity
@@ -21,6 +20,7 @@ import com.example.data.remote.VeoOperationParser
 import com.example.data.remote.VeoParameters
 import com.example.data.remote.VeoPromptInstance
 import com.example.data.remote.VeoRetrofitClient
+import com.example.ui.theme.AppLanguage
 import java.io.File
 import java.io.FileInputStream
 import kotlinx.coroutines.CancellationException
@@ -28,6 +28,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+import retrofit2.HttpException
 
 data class ScenePreset(
     val id: String,
@@ -65,22 +67,33 @@ class VideoRepository(
 
     fun getActiveApiKey(): String = apiKeyManager.getActiveApiKey()
 
+    fun getSavedBackupKey(): String = apiKeyManager.getSavedBackupKey()
+
     fun getMaskedKeyPreview(): String = apiKeyManager.getMaskedKeyPreview()
 
-    fun savePermanentApiKey(apiKey: String) {
-        apiKeyManager.savePermanentApiKey(apiKey)
+    fun savePermanentApiKey(apiKey: String, backupKey: String = "") {
+        apiKeyManager.savePermanentApiKey(apiKey, backupKey)
     }
 
     fun clearSavedApiKey() {
         apiKeyManager.clearSavedApiKey()
     }
 
+    fun getSavedLanguage(): AppLanguage = apiKeyManager.getSavedLanguage()
+
+    fun saveLanguage(language: AppLanguage) {
+        apiKeyManager.saveLanguage(language)
+    }
+
+    fun isAutoFallback429Enabled(): Boolean = apiKeyManager.isAutoFallback429Enabled()
+
+    fun setAutoFallback429Enabled(enabled: Boolean) {
+        apiKeyManager.setAutoFallback429Enabled(enabled)
+    }
+
     /**
      * Executes the full Veo 3.1 generation + 10-second polling + file download flow,
-     * matching the exact @google/genai workflow:
-     * 1. ai.models.generateVideos({ model: "veo-3.1-generate-preview", prompt })
-     * 2. while (!operation.done) { delay(10000); ai.operations.getVideosOperation({ operation }) }
-     * 3. ai.files.download({ file: operation.response.generatedVideos[0].video, downloadPath })
+     * with Smart HTTP 429 Exponential Backoff, Multi-Key Rotation, and Model Fallback.
      */
     suspend fun generateAndDownloadVideo(
         title: String,
@@ -89,11 +102,12 @@ class VideoRepository(
         aspectRatio: String,
         resolution: String,
         downloadPath: String,
+        autoFallback429: Boolean,
         onLog: (String) -> Unit,
         onPollProgress: (pollCount: Int, secondsUntilNextPoll: Int, elapsedSeconds: Int, operationName: String) -> Unit
     ): Result<VideoGenerationEntity> = withContext(Dispatchers.IO) {
-        val apiKey = apiKeyManager.getActiveApiKey()
-        if (!apiKeyManager.hasValidApiKey()) {
+        val availableKeys = apiKeyManager.getAvailableApiKeys()
+        if (availableKeys.isEmpty()) {
             val missingKeyMsg =
                 "کلید API تنظیم نشده است. لطفاً کلید Gemini API خود را در بخش «تنظیم دائمی کلید API» بالای صفحه وارد و ذخیره کنید."
             onLog("ERROR: $missingKeyMsg")
@@ -114,38 +128,83 @@ class VideoRepository(
         var currentEntity = initialEntity.copy(id = entityId)
 
         try {
-            onLog("Initializing Veo request -> model: \"$model\"")
-            onLog("Prompt (${prompt.length} chars) queued for generation...")
-
-            val initialJson = try {
-                val request = GenerateVideosRequest(
-                    prompt = prompt,
-                    config = VeoConfig(
-                        numberOfVideos = 1,
-                        resolution = resolution,
-                        aspectRatio = aspectRatio
-                    )
-                )
-                VeoRetrofitClient.service.generateVideos(
-                    model = model,
-                    apiKey = apiKey,
-                    request = request
-                )
-            } catch (primaryError: Exception) {
-                if (primaryError is CancellationException) throw primaryError
-                onLog("Note: :generateVideos returned (${primaryError.message?.take(60)}), trying :predictLongRunning...")
-                val fallbackReq = PredictLongRunningRequest(
-                    instances = listOf(VeoPromptInstance(prompt = prompt)),
-                    parameters = VeoParameters(aspectRatio = aspectRatio, sampleCount = 1)
-                )
-                VeoRetrofitClient.service.predictLongRunning(
-                    model = model,
-                    apiKey = apiKey,
-                    request = fallbackReq
-                )
+            // Candidate models in priority order when autoFallback429 is enabled
+            val candidateModels = if (autoFallback429) {
+                listOf(
+                    model,
+                    "veo-3.1-fast-generate-preview",
+                    "veo-3.1-generate-preview"
+                ).distinct()
+            } else {
+                listOf(model)
             }
 
-            var operation: ParsedVeoOperation = VeoOperationParser.parse(initialJson)
+            var activeKey = availableKeys.first()
+            var usedModel = model
+            var initialJson: JsonObject? = null
+            var lastError: Exception? = null
+            var elapsedSeconds = 0
+
+            outerLoop@ for ((modelIndex, candidateModel) in candidateModels.withIndex()) {
+                for ((keyIndex, candidateKey) in availableKeys.withIndex()) {
+                    val maxAttempts = if (autoFallback429) 2 else 1
+                    for (attempt in 1..maxAttempts) {
+                        try {
+                            usedModel = candidateModel
+                            activeKey = candidateKey
+                            onLog("ارسال درخواست ساخت ویدیو به مدل \"$candidateModel\" (تلاش $attempt)...")
+
+                            initialJson = startVeoOperation(
+                                model = candidateModel,
+                                apiKey = candidateKey,
+                                prompt = prompt,
+                                aspectRatio = aspectRatio,
+                                resolution = resolution,
+                                onLog = onLog
+                            )
+                            break@outerLoop
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            lastError = e
+                            val is429 = isHttp429Error(e)
+
+                            if (!is429) {
+                                throw e
+                            }
+
+                            val detailed429 = extractHttpErrorDetail(e)
+                            onLog("هشدار HTTP 429 (محدودیت نرخ درخواست): $detailed429")
+
+                            // If we have another API key, rotate immediately!
+                            if (keyIndex + 1 < availableKeys.size) {
+                                onLog("چرخش خودکار به کلید API پشتیبان شماره ${keyIndex + 2}...")
+                                break
+                            }
+
+                            // Otherwise wait with exponential backoff before retrying or switching model
+                            val hasMoreAttempts = attempt < maxAttempts || (modelIndex + 1 < candidateModels.size)
+                            if (hasMoreAttempts && autoFallback429) {
+                                val waitSecs = 12 * attempt
+                                val nextStepLabel = if (attempt < maxAttempts) {
+                                    "تلاش مجدد روی $candidateModel"
+                                } else {
+                                    "جایگزینی خودکار با مدل ${candidateModels[modelIndex + 1]}"
+                                }
+                                onLog("مکث هوشمند $waitSecs ثانیه‌ای برای رفع محدودیت HTTP 429 ($nextStepLabel)...")
+                                for (rem in waitSecs downTo 1) {
+                                    onPollProgress(0, rem, elapsedSeconds, "HTTP 429 Cooldown ($rem s)")
+                                    delay(1_000L)
+                                    elapsedSeconds += 1
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            val resolvedJson = initialJson ?: throw buildFriendlyError(lastError)
+
+            var operation: ParsedVeoOperation = VeoOperationParser.parse(resolvedJson)
             if (operation.errorMessage != null) {
                 throw IllegalStateException(operation.errorMessage)
             }
@@ -153,11 +212,11 @@ class VideoRepository(
                 throw IllegalStateException("Veo API did not return an operation name: ${operation.rawJson.take(200)}")
             }
 
-            onLog("Operation started: ${operation.name.ifBlank { "inline-operation" }}")
+            onLog("Operation started ($usedModel): ${operation.name.ifBlank { "inline-operation" }}")
             var pollCount = 0
-            var elapsedSeconds = 0
 
             currentEntity = currentEntity.copy(
+                model = usedModel,
                 operationName = operation.name,
                 status = VideoGenerationEntity.STATUS_POLLING
             )
@@ -175,11 +234,27 @@ class VideoRepository(
                 pollCount += 1
                 onPollProgress(pollCount, 0, elapsedSeconds, operation.name)
                 val cleanOpPath = operation.name.removePrefix("/")
-                val polledJson = VeoRetrofitClient.service.getVideosOperation(
-                    operationName = cleanOpPath,
-                    apiKey = apiKey
-                )
-                operation = VeoOperationParser.parse(polledJson)
+
+                try {
+                    val polledJson = VeoRetrofitClient.service.getVideosOperation(
+                        operationName = cleanOpPath,
+                        apiKey = activeKey
+                    )
+                    operation = VeoOperationParser.parse(polledJson)
+                } catch (pollErr: Exception) {
+                    if (pollErr is CancellationException) throw pollErr
+                    if (isHttp429Error(pollErr)) {
+                        onLog("هشدار HTTP 429 حین استعلام وضعیت؛ مکث ۱۵ ثانیه‌ای و ادامه خودکار...")
+                        for (rem in 15 downTo 1) {
+                            onPollProgress(pollCount, rem, elapsedSeconds, "Cooldown 429 (${rem}s)")
+                            delay(1_000L)
+                            elapsedSeconds += 1
+                        }
+                        continue
+                    } else {
+                        throw buildFriendlyError(pollErr)
+                    }
+                }
 
                 currentEntity = currentEntity.copy(
                     pollCount = pollCount,
@@ -201,13 +276,12 @@ class VideoRepository(
 
             // Save to local app videos folder using the requested filename (e.g., dialogue_example.mp4)
             val videosDir = File(appContext.filesDir, "veo_videos").apply { mkdirs() }
-            // Keep both the exact filename requested (e.g., dialogue_example.mp4) and a unique copy per take
             val primaryFile = File(videosDir, sanitizedFileName)
             val uniqueTakeFile = File(videosDir, "take_${entityId}_$sanitizedFileName")
 
             val downloadResult = VeoRetrofitClient.downloadGeneratedVideo(
                 parsedOp = operation,
-                apiKey = apiKey,
+                apiKey = activeKey,
                 targetFile = uniqueTakeFile
             )
             val savedFile = downloadResult.getOrThrow()
@@ -234,15 +308,97 @@ class VideoRepository(
             dao.updateGeneration(cancelled)
             throw ce
         } catch (e: Exception) {
-            val errMsg = e.message ?: "Unknown error during Veo video generation"
+            val friendly = buildFriendlyError(e)
+            val errMsg = friendly.message ?: "Unknown error during Veo video generation"
             onLog("ERROR: $errMsg")
             val failed = currentEntity.copy(
                 status = VideoGenerationEntity.STATUS_FAILED,
                 errorMessage = errMsg
             )
             dao.updateGeneration(failed)
-            Result.failure(e)
+            Result.failure(friendly)
         }
+    }
+
+    private suspend fun startVeoOperation(
+        model: String,
+        apiKey: String,
+        prompt: String,
+        aspectRatio: String,
+        resolution: String,
+        onLog: (String) -> Unit
+    ): JsonObject {
+        return try {
+            val request = GenerateVideosRequest(
+                prompt = prompt,
+                config = VeoConfig(
+                    numberOfVideos = 1,
+                    resolution = resolution,
+                    aspectRatio = aspectRatio
+                )
+            )
+            VeoRetrofitClient.service.generateVideos(
+                model = model,
+                apiKey = apiKey,
+                request = request
+            )
+        } catch (primaryError: Exception) {
+            if (primaryError is CancellationException) throw primaryError
+            // IMPORTANT: Do NOT immediately call fallback if primaryError is HTTP 429 (Too Many Requests),
+            // because firing a second request immediately aggravates the 429 rate limit!
+            if (isHttp429Error(primaryError)) {
+                throw primaryError
+            }
+            // Only fall back to :predictLongRunning if :generateVideos returned HTTP 400 / 404 schema error
+            onLog("Endpoint :generateVideos returned non-429 (${primaryError.message?.take(45)}), trying :predictLongRunning...")
+            delay(1_500L)
+            val fallbackReq = PredictLongRunningRequest(
+                instances = listOf(VeoPromptInstance(prompt = prompt)),
+                parameters = VeoParameters(aspectRatio = aspectRatio, sampleCount = 1)
+            )
+            VeoRetrofitClient.service.predictLongRunning(
+                model = model,
+                apiKey = apiKey,
+                request = fallbackReq
+            )
+        }
+    }
+
+    private fun isHttp429Error(e: Throwable?): Boolean {
+        if (e == null) return false
+        if (e is HttpException && e.code() == 429) return true
+        val msg = e.message.orEmpty()
+        return msg.contains("429") ||
+            msg.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+            msg.contains("Too Many Requests", ignoreCase = true)
+    }
+
+    private fun extractHttpErrorDetail(e: Throwable?): String {
+        if (e is HttpException) {
+            val rawBody = runCatching { e.response()?.errorBody()?.string() }.getOrNull().orEmpty()
+            if (rawBody.isNotBlank()) {
+                val msgMatch = Regex(""""message"\s*:\s*"([^"]+)"""").find(rawBody)
+                if (msgMatch != null) {
+                    return msgMatch.groupValues[1]
+                }
+                return rawBody.take(160)
+            }
+        }
+        return e?.message ?: "HTTP 429 Too Many Requests"
+    }
+
+    private fun buildFriendlyError(e: Exception?): Exception {
+        if (e == null) return IllegalStateException("خطای نامشخص در ارتباط با سرور Veo")
+        if (isHttp429Error(e)) {
+            val serverDetail = extractHttpErrorDetail(e)
+            return IllegalStateException(
+                "خطای HTTP 429 (اتمام سهمیه یا محدودیت تعداد درخواست در دقیقه): " +
+                    "سهمیه مدل Veo روی این کلید API پر شده است ($serverDetail). " +
+                    "راه‌حل: ۱) چند ثانیه صبر کنید یا مدل veo-3.1-fast را انتخاب نمایید. " +
+                    "۲) در تنظیمات کلید API، یک کلید پشتیبان اضافه کنید یا از فعال بودن طرح Paid/Billing روی پروژه Google AI Studio برای مدل ویدیویی Veo اطمینان حاصل فرمایید."
+            )
+        }
+        return e
     }
 
     /**
@@ -285,7 +441,7 @@ class VideoRepository(
                 Result.success(text)
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(buildFriendlyError(e))
         }
     }
 
@@ -348,7 +504,6 @@ class VideoRepository(
     }
 
     companion object {
-        // Exact prompt from the user's code snippet
         val DEFAULT_CRYPTIC_WALL_PROMPT = """
             A close up of two people staring at a cryptic drawing on a wall, torchlight flickering.
             A man murmurs, 'This must be it. That's the secret code.' The woman looks at him and whispering excitedly, 'What did you find?'

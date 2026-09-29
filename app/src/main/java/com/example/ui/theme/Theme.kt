@@ -4,7 +4,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 
 private val CinemaDarkColorScheme = darkColorScheme(
     primary = TorchAmber,
@@ -52,13 +55,23 @@ private val CinemaLightColorScheme = lightColorScheme(
 
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = true, // Cinema director studio defaults to intentional dark mode
+    darkTheme: Boolean = true,
+    language: AppLanguage = AppLanguage.FA,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) CinemaDarkColorScheme else CinemaLightColorScheme
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    val strings = if (language == AppLanguage.FA) PersianStrings else EnglishStrings
+    val layoutDirection = if (language.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val typography = buildAppTypography(isPersian = language == AppLanguage.FA)
+
+    CompositionLocalProvider(
+        LocalAppStrings provides strings,
+        LocalLayoutDirection provides layoutDirection
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = typography,
+            content = content
+        )
+    }
 }

@@ -9,6 +9,7 @@ import com.example.data.local.VideoGenerationEntity
 import com.example.data.repository.DialogueCue
 import com.example.data.repository.ScenePreset
 import com.example.data.repository.VideoRepository
+import com.example.ui.theme.AppLanguage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,12 +39,14 @@ data class TelemetryLogEntry(
 )
 
 data class StudioUiState(
+    val language: AppLanguage = AppLanguage.FA,
     val currentTab: StudioTab = StudioTab.DIRECTOR,
     val sceneTitle: String = "Cryptic Wall Discovery",
     val visualSetting: String = "A close up of two people staring at a cryptic drawing on a wall, torchlight flickering.",
     val dialogueCues: List<DialogueCue> = VideoRepository.DEFAULT_DIALOGUE_CUES,
     val prompt: String = VideoRepository.DEFAULT_CRYPTIC_WALL_PROMPT,
     val selectedModel: String = "veo-3.1-generate-preview",
+    val autoFallback429: Boolean = true,
     val aspectRatio: String = "16:9",
     val resolution: String = "1080p",
     val downloadPath: String = "dialogue_example.mp4",
@@ -60,7 +63,7 @@ data class StudioUiState(
         ),
         TelemetryLogEntry(
             timestamp = "00:00:00",
-            message = "Loaded prompt: Cryptic Wall Discovery -> dialogue_example.mp4"
+            message = "Smart HTTP 429 Auto-Retry & Model Fallback active."
         )
     ),
     val selectedTake: VideoGenerationEntity? = null,
@@ -68,6 +71,7 @@ data class StudioUiState(
     val errorBanner: String? = null,
     val isApiKeyConfigured: Boolean = true,
     val maskedApiKey: String = "Not Set",
+    val savedBackupKey: String = "",
     val showApiKeyDialog: Boolean = false
 )
 
@@ -77,8 +81,11 @@ class StudioViewModel(
 
     private val _uiState = MutableStateFlow(
         StudioUiState(
+            language = repository.getSavedLanguage(),
+            autoFallback429 = repository.isAutoFallback429Enabled(),
             isApiKeyConfigured = repository.isApiKeyConfigured(),
-            maskedApiKey = repository.getMaskedKeyPreview()
+            maskedApiKey = repository.getMaskedKeyPreview(),
+            savedBackupKey = repository.getSavedBackupKey()
         )
     )
     val uiState: StateFlow<StudioUiState> = _uiState.asStateFlow()
@@ -112,6 +119,34 @@ class StudioViewModel(
                 }
             }
         }
+    }
+
+    fun toggleLanguage() {
+        val nextLang = if (_uiState.value.language == AppLanguage.FA) {
+            AppLanguage.EN
+        } else {
+            AppLanguage.FA
+        }
+        setLanguage(nextLang)
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        repository.saveLanguage(language)
+        _uiState.update {
+            it.copy(
+                language = language,
+                bannerMessage = if (language == AppLanguage.FA) {
+                    "زبان منوها به فارسی تغییر یافت."
+                } else {
+                    "Menu language switched to English."
+                }
+            )
+        }
+    }
+
+    fun setAutoFallback429(enabled: Boolean) {
+        repository.setAutoFallback429Enabled(enabled)
+        _uiState.update { it.copy(autoFallback429 = enabled) }
     }
 
     fun selectTab(tab: StudioTab) {
@@ -201,7 +236,11 @@ class StudioViewModel(
                 prompt = preset.prompt,
                 downloadPath = preset.defaultFileName,
                 errorBanner = null,
-                bannerMessage = "Loaded preset: ${preset.title}"
+                bannerMessage = if (it.language == AppLanguage.FA) {
+                    "صحنه آماده بارگذاری شد: ${preset.title}"
+                } else {
+                    "Loaded preset: ${preset.title}"
+                }
             )
         }
         appendLog("Loaded preset '${preset.title}' -> ${preset.defaultFileName}")
@@ -224,20 +263,25 @@ class StudioViewModel(
         _uiState.update { it.copy(showApiKeyDialog = false) }
     }
 
-    fun savePermanentApiKey(rawKey: String) {
+    fun savePermanentApiKey(rawKey: String, backupKey: String = "") {
         val cleaned = rawKey.trim()
         if (cleaned.isBlank()) {
             _uiState.update { it.copy(errorBanner = "لطفاً یک کلید API معتبر وارد کنید.") }
             return
         }
-        repository.savePermanentApiKey(cleaned)
+        repository.savePermanentApiKey(cleaned, backupKey.trim())
         _uiState.update {
             it.copy(
                 isApiKeyConfigured = repository.isApiKeyConfigured(),
                 maskedApiKey = repository.getMaskedKeyPreview(),
+                savedBackupKey = repository.getSavedBackupKey(),
                 showApiKeyDialog = false,
                 errorBanner = null,
-                bannerMessage = "کلید API با موفقیت به صورت دائمی در حافظه برنامه ذخیره شد."
+                bannerMessage = if (it.language == AppLanguage.FA) {
+                    "کلید API با موفقیت به صورت دائمی در حافظه برنامه ذخیره شد."
+                } else {
+                    "API Key permanently saved to device storage."
+                }
             )
         }
         appendLog("Permanent Gemini API Key saved (${repository.getMaskedKeyPreview()}).", isSuccess = true)
@@ -249,11 +293,16 @@ class StudioViewModel(
             it.copy(
                 isApiKeyConfigured = repository.isApiKeyConfigured(),
                 maskedApiKey = repository.getMaskedKeyPreview(),
+                savedBackupKey = "",
                 showApiKeyDialog = false,
-                bannerMessage = "کلید سفارشی پاک شد."
+                bannerMessage = if (it.language == AppLanguage.FA) {
+                    "کلیدهای سفارشی پاک شدند."
+                } else {
+                    "Cleared custom saved API keys."
+                }
             )
         }
-        appendLog("Cleared custom saved API key.")
+        appendLog("Cleared custom saved API keys.")
     }
 
     fun polishPromptWithAi() {
@@ -280,7 +329,11 @@ class StudioViewModel(
                         it.copy(
                             isPolishingPrompt = false,
                             prompt = polished,
-                            bannerMessage = "Dialogue script enhanced with cinematic framing & vocal delivery cues."
+                            bannerMessage = if (it.language == AppLanguage.FA) {
+                                "پرامپت دیالوگ و زاویه دوربین با هوش مصنوعی ارتقا یافت."
+                            } else {
+                                "Dialogue script enhanced with cinematic framing & vocal delivery cues."
+                            }
                         )
                     }
                     appendLog("Prompt polished successfully via gemini-3.5-flash.", isSuccess = true)
@@ -302,7 +355,7 @@ class StudioViewModel(
         val state = _uiState.value
         if (state.isGenerating) return
         if (state.prompt.isBlank()) {
-            _uiState.update { it.copy(errorBanner = "Please enter a scene & dialogue prompt before generating.") }
+            _uiState.update { it.copy(errorBanner = "لطفاً ابتدا پرامپت صحنه و دیالوگ را وارد کنید.") }
             return
         }
         if (!repository.isApiKeyConfigured()) {
@@ -337,6 +390,7 @@ class StudioViewModel(
                     aspectRatio = state.aspectRatio,
                     resolution = state.resolution,
                     downloadPath = state.downloadPath,
+                    autoFallback429 = state.autoFallback429,
                     onLog = { msg ->
                         val isErr = msg.startsWith("ERROR:")
                         val isOk = msg.startsWith("Generated video saved")
@@ -361,7 +415,11 @@ class StudioViewModel(
                                 isGenerating = false,
                                 secondsUntilNextPoll = 0,
                                 selectedTake = completedTake,
-                                bannerMessage = "Generated video saved to ${completedTake.downloadPath}"
+                                bannerMessage = if (it.language == AppLanguage.FA) {
+                                    "ویدیو با موفقیت ساخته شد و در فایل ${completedTake.downloadPath} ذخیره گردید."
+                                } else {
+                                    "Generated video saved to ${completedTake.downloadPath}"
+                                }
                             )
                         }
                     },
@@ -380,7 +438,11 @@ class StudioViewModel(
                     it.copy(
                         isGenerating = false,
                         secondsUntilNextPoll = 0,
-                        bannerMessage = "Video generation polling cancelled."
+                        bannerMessage = if (it.language == AppLanguage.FA) {
+                            "عملیات ساخت ویدیو لغو شد."
+                        } else {
+                            "Video generation polling cancelled."
+                        }
                     )
                 }
             }
@@ -397,7 +459,7 @@ class StudioViewModel(
             it.copy(
                 selectedTake = take,
                 currentTab = StudioTab.DIRECTOR,
-                bannerMessage = "Loaded take: ${take.title} (${take.downloadPath})"
+                bannerMessage = "${take.title} (${take.downloadPath})"
             )
         }
     }
@@ -412,7 +474,11 @@ class StudioViewModel(
                 resolution = take.resolution,
                 downloadPath = take.downloadPath,
                 currentTab = StudioTab.DIRECTOR,
-                bannerMessage = "Restored prompt from '${take.title}' into Director Studio."
+                bannerMessage = if (it.language == AppLanguage.FA) {
+                    "پرامپت «${take.title}» در استودیو بارگذاری شد."
+                } else {
+                    "Restored prompt from '${take.title}' into Director Studio."
+                }
             )
         }
     }
@@ -439,7 +505,13 @@ class StudioViewModel(
             res.fold(
                 onSuccess = { publicPath ->
                     _uiState.update {
-                        it.copy(bannerMessage = "Exported to device gallery: $publicPath")
+                        it.copy(
+                            bannerMessage = if (it.language == AppLanguage.FA) {
+                                "در گالری گوشی ذخیره شد: $publicPath"
+                            } else {
+                                "Exported to device gallery: $publicPath"
+                            }
+                        )
                     }
                     appendLog("Exported MP4 to $publicPath", isSuccess = true)
                 },

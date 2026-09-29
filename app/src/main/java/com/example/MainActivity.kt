@@ -5,7 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.screens.VeoStudioScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -16,10 +18,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MyApplicationTheme {
-                val studioViewModel: StudioViewModel = viewModel(
-                    factory = StudioViewModel.provideFactory(applicationContext)
-                )
+            val studioViewModel: StudioViewModel = viewModel(
+                factory = StudioViewModel.provideFactory(applicationContext)
+            )
+            val uiState by studioViewModel.uiState.collectAsStateWithLifecycle()
+
+            MyApplicationTheme(
+                language = uiState.language
+            ) {
                 VeoStudioScreen(
                     viewModel = studioViewModel,
                     modifier = Modifier.fillMaxSize()

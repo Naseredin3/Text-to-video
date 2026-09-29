@@ -30,32 +30,31 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.R
 import com.example.data.repository.DialogueCue
 import com.example.data.repository.ScenePreset
 import com.example.data.repository.VideoRepository
+import com.example.ui.theme.LocalAppStrings
 import com.example.ui.viewmodel.StudioUiState
 
 private val CAMERA_ATMOSPHERE_CHIPS = listOf(
@@ -78,12 +77,14 @@ fun DialogueComposerSection(
     onRemoveDialogueCue: (String) -> Unit,
     onAppendCameraKeyword: (String) -> Unit,
     onModelChange: (String) -> Unit,
+    onAutoFallback429Change: (Boolean) -> Unit,
     onAspectRatioChange: (String) -> Unit,
     onResolutionChange: (String) -> Unit,
     onDownloadPathChange: (String) -> Unit,
     onGenerateClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     var showAddCueForm by rememberSaveable { mutableStateOf(false) }
     var newSpeaker by rememberSaveable { mutableStateOf("Explorer") }
     var newDelivery by rememberSaveable { mutableStateOf("whispers intently") }
@@ -101,7 +102,7 @@ fun DialogueComposerSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "SCENE & DIALOGUE PRESETS",
+                    text = strings.presetsHeader,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -109,7 +110,7 @@ fun DialogueComposerSection(
                     onClick = onRestoreDefault,
                     label = {
                         Text(
-                            text = stringResource(R.string.reset_default_prompt),
+                            text = strings.restoreDefaultPrompt,
                             style = MaterialTheme.typography.labelSmall
                         )
                     },
@@ -201,6 +202,7 @@ fun DialogueComposerSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -211,17 +213,19 @@ fun DialogueComposerSection(
                         )
                         Column {
                             Text(
-                                text = "Spoken Dialogue Cues",
+                                text = strings.spokenDialogueCuesTitle,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "Veo 3.1 synthesizes lip-synced speech from single-quoted lines",
+                                text = strings.spokenDialogueCuesSubtitle,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     FilledTonalButton(
                         onClick = { showAddCueForm = !showAddCueForm },
@@ -233,7 +237,7 @@ fun DialogueComposerSection(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Cue", style = MaterialTheme.typography.labelLarge)
+                        Text(text = strings.addCueButton, style = MaterialTheme.typography.labelLarge)
                     }
                 }
 
@@ -262,7 +266,7 @@ fun DialogueComposerSection(
                                 OutlinedTextField(
                                     value = newSpeaker,
                                     onValueChange = { newSpeaker = it },
-                                    label = { Text("Character") },
+                                    label = { Text(strings.characterLabel) },
                                     singleLine = true,
                                     modifier = Modifier
                                         .weight(1f)
@@ -271,7 +275,7 @@ fun DialogueComposerSection(
                                 OutlinedTextField(
                                     value = newDelivery,
                                     onValueChange = { newDelivery = it },
-                                    label = { Text("Vocal Delivery") },
+                                    label = { Text(strings.vocalDeliveryLabel) },
                                     singleLine = true,
                                     modifier = Modifier
                                         .weight(1f)
@@ -281,7 +285,7 @@ fun DialogueComposerSection(
                             OutlinedTextField(
                                 value = newLine,
                                 onValueChange = { newLine = it },
-                                label = { Text("Spoken Line (wrapped in '...' automatically)") },
+                                label = { Text(strings.spokenLineLabel) },
                                 singleLine = true,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -301,7 +305,7 @@ fun DialogueComposerSection(
                                     },
                                     modifier = Modifier.testTag("confirm_add_cue_button")
                                 ) {
-                                    Text("Insert into Prompt")
+                                    Text(strings.insertIntoPromptCta)
                                 }
                             }
                         }
@@ -331,9 +335,10 @@ fun DialogueComposerSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = stringResource(R.string.prompt_label),
+                        text = strings.promptSectionTitle,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
                     )
 
                     OutlinedButton(
@@ -357,7 +362,7 @@ fun DialogueComposerSection(
                         }
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = stringResource(R.string.enhance_prompt_cta),
+                            text = strings.aiPolishDialogueCta,
                             style = MaterialTheme.typography.labelLarge
                         )
                     }
@@ -366,7 +371,7 @@ fun DialogueComposerSection(
                 OutlinedTextField(
                     value = uiState.prompt,
                     onValueChange = onPromptChange,
-                    placeholder = { Text(stringResource(R.string.prompt_placeholder)) },
+                    placeholder = { Text(strings.promptPlaceholder) },
                     minLines = 4,
                     maxLines = 8,
                     shape = RoundedCornerShape(14.dp),
@@ -376,7 +381,7 @@ fun DialogueComposerSection(
                 )
 
                 Text(
-                    text = "Quick Camera & Lighting Modifiers:",
+                    text = strings.quickCameraModifiersLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -428,7 +433,7 @@ fun DialogueComposerSection(
                         tint = MaterialTheme.colorScheme.secondary
                     )
                     Text(
-                        text = "Veo 3.1 Operation & Download Config",
+                        text = strings.operationAndDownloadConfigTitle,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -436,7 +441,7 @@ fun DialogueComposerSection(
 
                 // Model selector
                 Text(
-                    text = stringResource(R.string.model_label),
+                    text = strings.veoModelLabel,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -445,8 +450,8 @@ fun DialogueComposerSection(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(
-                        "veo-3.1-generate-preview" to "veo-3.1-generate-preview (Cinema HQ)",
-                        "veo-3.1-fast-generate-preview" to "veo-3.1-fast (Rapid)"
+                        "veo-3.1-generate-preview" to "veo-3.1-generate-preview (HQ)",
+                        "veo-3.1-fast-generate-preview" to "veo-3.1-fast (Rapid / Low-429)"
                     ).forEach { (modelId, label) ->
                         FilterChip(
                             selected = uiState.selectedModel == modelId,
@@ -464,6 +469,41 @@ fun DialogueComposerSection(
                     }
                 }
 
+                // Smart HTTP 429 Auto-Retry & Fallback Switch
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = strings.autoFallback429Label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = strings.autoFallback429Sub,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Switch(
+                            checked = uiState.autoFallback429,
+                            onCheckedChange = onAutoFallback429Change,
+                            modifier = Modifier.testTag("auto_fallback_429_switch")
+                        )
+                    }
+                }
+
                 // Aspect ratio & resolution row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -471,7 +511,7 @@ fun DialogueComposerSection(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.aspect_ratio_label),
+                            text = strings.aspectRatioLabel,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -489,7 +529,7 @@ fun DialogueComposerSection(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.resolution_label),
+                            text = strings.resolutionLabel,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -510,7 +550,7 @@ fun DialogueComposerSection(
                 OutlinedTextField(
                     value = uiState.downloadPath,
                     onValueChange = onDownloadPathChange,
-                    label = { Text(stringResource(R.string.output_filename_label)) },
+                    label = { Text(strings.outputFilenameLabel) },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
@@ -539,9 +579,9 @@ fun DialogueComposerSection(
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = if (uiState.isGenerating) {
-                            "Polling Veo 3.1 Operation (${uiState.elapsedSeconds}s)..."
+                            strings.pollingInProgressCta(uiState.elapsedSeconds)
                         } else {
-                            "Generate & Download (${uiState.downloadPath})"
+                            strings.generateAndDownloadCta(uiState.downloadPath)
                         },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold

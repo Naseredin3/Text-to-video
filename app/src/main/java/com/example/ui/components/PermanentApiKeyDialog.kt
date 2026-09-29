@@ -4,12 +4,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -39,6 +36,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.EmeraldReady
+import com.example.ui.theme.LocalAppStrings
 import com.example.ui.theme.TorchAmber
 
 @Composable
@@ -48,6 +46,7 @@ fun PermanentApiKeyBanner(
     onOpenDialog: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalAppStrings.current
     Surface(
         onClick = onOpenDialog,
         shape = RoundedCornerShape(14.dp),
@@ -85,9 +84,9 @@ fun PermanentApiKeyBanner(
                 Column {
                     Text(
                         text = if (isConfigured) {
-                            "کلید API دائمی فعال است ($maskedKey)"
+                            strings.apiKeyBannerConfiguredTitle(maskedKey)
                         } else {
-                            "تنظیم دائمی کلید Gemini API (الزامی برای ساخت ویدیو)"
+                            strings.apiKeyBannerUnconfiguredTitle
                         },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -95,9 +94,9 @@ fun PermanentApiKeyBanner(
                     )
                     Text(
                         text = if (isConfigured) {
-                            "برای تغییر یا مشاهده کلید ذخیره شده ضربه بزنید"
+                            strings.apiKeyBannerConfiguredSub
                         } else {
-                            "یک‌بار کلید خود را وارد کنید تا برای همیشه در حافظه برنامه ذخیره شود"
+                            strings.apiKeyBannerUnconfiguredSub
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -106,7 +105,7 @@ fun PermanentApiKeyBanner(
             }
 
             Text(
-                text = if (isConfigured) "ویرایش" else "ثبت دائمی",
+                text = if (isConfigured) strings.editAction else strings.savePermanentAction,
                 style = MaterialTheme.typography.labelMedium,
                 color = if (isConfigured) EmeraldReady else TorchAmber,
                 fontWeight = FontWeight.Bold
@@ -119,11 +118,14 @@ fun PermanentApiKeyBanner(
 fun PermanentApiKeyDialog(
     isConfigured: Boolean,
     maskedKey: String,
+    initialBackupKey: String,
     onDismiss: () -> Unit,
-    onSaveKey: (String) -> Unit,
+    onSaveKey: (primary: String, backup: String) -> Unit,
     onClearKey: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var apiKeyInput by rememberSaveable { mutableStateOf("") }
+    var backupKeyInput by rememberSaveable { mutableStateOf(initialBackupKey) }
     var showKeyText by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
@@ -137,7 +139,7 @@ fun PermanentApiKeyDialog(
         },
         title = {
             Text(
-                text = "تنظیم دائمی کلید Gemini API",
+                text = strings.apiKeyDialogTitle,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -148,7 +150,7 @@ fun PermanentApiKeyDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "کلید Gemini API خود (شروع با AIza...) را در کادر زیر وارد کنید. این کلید به صورت دائمی در حافظه داخلی برنامه روی گوشی شما ذخیره می‌شود و دیگر نیازی به وارد کردن مجدد آن نخواهد بود.",
+                    text = strings.apiKeyDialogDescription,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -161,7 +163,7 @@ fun PermanentApiKeyDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "کلید فعلی فعال: $maskedKey",
+                            text = strings.apiKeyBannerConfiguredTitle(maskedKey),
                             style = MaterialTheme.typography.labelMedium,
                             color = EmeraldReady,
                             modifier = Modifier.padding(10.dp)
@@ -172,7 +174,7 @@ fun PermanentApiKeyDialog(
                 OutlinedTextField(
                     value = apiKeyInput,
                     onValueChange = { apiKeyInput = it },
-                    label = { Text("Gemini API Key (AIza...)") },
+                    label = { Text(strings.apiKeyInputLabel) },
                     placeholder = { Text("AIzaSy...") },
                     singleLine = true,
                     visualTransformation = if (showKeyText) {
@@ -198,23 +200,40 @@ fun PermanentApiKeyDialog(
                         .testTag("permanent_api_key_input")
                 )
 
+                OutlinedTextField(
+                    value = backupKeyInput,
+                    onValueChange = { backupKeyInput = it },
+                    label = { Text(strings.backupApiKeyInputLabel) },
+                    placeholder = { Text("AIzaSy...") },
+                    singleLine = true,
+                    visualTransformation = if (showKeyText) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("backup_api_key_input")
+                )
+
                 if (isConfigured) {
                     TextButton(
                         onClick = onClearKey,
                         modifier = Modifier.align(Alignment.End)
                     ) {
-                        Text("حذف کلید ذخیره‌شده")
+                        Text(strings.clearSavedKeyBtn)
                     }
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onSaveKey(apiKeyInput) },
+                onClick = { onSaveKey(apiKeyInput, backupKeyInput) },
                 enabled = apiKeyInput.isNotBlank(),
                 modifier = Modifier.testTag("save_permanent_api_key_button")
             ) {
-                Text("ذخیره دائمی")
+                Text(strings.confirmSavePermanentBtn)
             }
         },
         dismissButton = {
@@ -222,7 +241,7 @@ fun PermanentApiKeyDialog(
                 onClick = onDismiss,
                 modifier = Modifier.testTag("cancel_api_key_dialog_button")
             ) {
-                Text("انصراف")
+                Text(strings.cancelBtn)
             }
         }
     )

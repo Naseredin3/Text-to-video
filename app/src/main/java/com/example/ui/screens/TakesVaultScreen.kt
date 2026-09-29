@@ -41,7 +41,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.local.VideoGenerationEntity
 import com.example.ui.theme.EmeraldReady
+import com.example.ui.theme.LocalAppStrings
 import com.example.ui.theme.TorchAmber
 import java.io.File
 import java.text.SimpleDateFormat
@@ -67,6 +67,7 @@ fun TakesVaultScreen(
 ) {
     BackHandler(onBack = onNavigateBackToStudio)
 
+    val strings = LocalAppStrings.current
     val dateFormatter = remember { SimpleDateFormat("MMM d, HH:mm", Locale.US) }
 
     if (takes.isEmpty()) {
@@ -96,13 +97,13 @@ fun TakesVaultScreen(
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = stringResource(R.string.empty_vault_title),
+                text = strings.emptyVaultTitle,
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = stringResource(R.string.empty_vault_subtitle),
+                text = strings.emptyVaultSubtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -112,7 +113,7 @@ fun TakesVaultScreen(
                 onClick = onNavigateBackToStudio,
                 modifier = Modifier.testTag("vault_go_to_studio_button")
             ) {
-                Text("Open Director Studio")
+                Text(strings.openDirectorStudioCta)
             }
         }
     } else {
@@ -131,11 +132,11 @@ fun TakesVaultScreen(
                 ) {
                     Column {
                         Text(
-                            text = "Recorded Takes & Operations",
+                            text = strings.recordedTakesHeader,
                             style = MaterialTheme.typography.headlineSmall
                         )
                         Text(
-                            text = "${takes.size} local Room DB record(s) • Saved MP4 files",
+                            text = strings.recordedTakesSub(takes.size),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -187,7 +188,6 @@ fun TakesVaultScreen(
                             StatusBadge(status = take.status)
                         }
 
-                        // Prompt preview
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -203,7 +203,6 @@ fun TakesVaultScreen(
                             )
                         }
 
-                        // Metadata chips row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -222,7 +221,6 @@ fun TakesVaultScreen(
                             )
                         }
 
-                        // Action buttons
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -240,7 +238,7 @@ fun TakesVaultScreen(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Play")
+                                        Text(strings.playBtn)
                                     }
 
                                     FilledTonalButton(
@@ -253,7 +251,7 @@ fun TakesVaultScreen(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Movies")
+                                        Text(strings.saveToMoviesBtn)
                                     }
                                 }
 
@@ -267,7 +265,7 @@ fun TakesVaultScreen(
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Use Prompt")
+                                    Text(strings.usePromptBtn)
                                 }
                             }
 

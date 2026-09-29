@@ -5,7 +5,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,12 +13,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,14 +26,15 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,10 +43,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.EmeraldReady
+import com.example.ui.theme.LocalAppStrings
 import com.example.ui.theme.TorchAmber
 import com.example.ui.viewmodel.StudioUiState
 
@@ -61,6 +62,7 @@ fun SdkTelemetryScreen(
 ) {
     BackHandler(onBack = onNavigateBackToStudio)
 
+    val strings = LocalAppStrings.current
     val context = LocalContext.current
     var showKotlinCode by rememberSaveable { mutableStateOf(false) }
     var copiedFeedback by remember { mutableStateOf(false) }
@@ -111,25 +113,24 @@ val request = GenerateVideosRequest(
 var operation = VeoOperationParser.parse(
     VeoRetrofitClient.service.generateVideos(
         model = "${uiState.selectedModel}",
-        apiKey = BuildConfig.GEMINI_API_KEY,
+        apiKey = apiKeyManager.getActiveApiKey(),
         request = request
     )
 )
 
 // Poll every 10,000ms until operation.done == true
 while (!operation.done) {
-    Log.i("VeoStudio", "Waiting for video generation to complete...")
     delay(10_000L)
     val polled = VeoRetrofitClient.service.getVideosOperation(
         operationName = operation.name,
-        apiKey = BuildConfig.GEMINI_API_KEY
+        apiKey = apiKeyManager.getActiveApiKey()
     )
     operation = VeoOperationParser.parse(polled)
 }
 
 // Download MP4 to local storage
 val targetFile = File(filesDir, "${uiState.downloadPath}")
-VeoRetrofitClient.downloadGeneratedVideo(operation, BuildConfig.GEMINI_API_KEY, targetFile)
+VeoRetrofitClient.downloadGeneratedVideo(operation, apiKeyManager.getActiveApiKey(), targetFile)
         """.trimIndent()
     }
 
@@ -140,7 +141,6 @@ VeoRetrofitClient.downloadGeneratedVideo(operation, BuildConfig.GEMINI_API_KEY, 
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Live Operation Telemetry Console Card
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -162,6 +162,7 @@ VeoRetrofitClient.downloadGeneratedVideo(operation, BuildConfig.GEMINI_API_KEY, 
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
+                            modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -172,12 +173,12 @@ VeoRetrofitClient.downloadGeneratedVideo(operation, BuildConfig.GEMINI_API_KEY, 
                             )
                             Column {
                                 Text(
-                                    text = "Live Operation Polling Console",
+                                    text = strings.liveConsoleTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "10,000ms interval getVideosOperation logs",
+                                    text = strings.liveConsoleSub,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -194,7 +195,7 @@ VeoRetrofitClient.downloadGeneratedVideo(operation, BuildConfig.GEMINI_API_KEY, 
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Clear")
+                            Text(strings.clearConsoleBtn)
                         }
                     }
 
@@ -228,7 +229,6 @@ VeoRetrofitClient.downloadGeneratedVideo(operation, BuildConfig.GEMINI_API_KEY, 
             }
         }
 
-        // 2. Live Code Inspector Card (@google/genai JS & Android Kotlin)
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -259,7 +259,7 @@ VeoRetrofitClient.downloadGeneratedVideo(operation, BuildConfig.GEMINI_API_KEY, 
                                 tint = MaterialTheme.colorScheme.secondary
                             )
                             Text(
-                                text = "Live Veo 3.1 Code Sync",
+                                text = strings.liveCodeSyncTitle,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -280,7 +280,7 @@ VeoRetrofitClient.downloadGeneratedVideo(operation, BuildConfig.GEMINI_API_KEY, 
                                 modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (copiedFeedback) "Copied!" else "Copy Code")
+                            Text(if (copiedFeedback) strings.copiedBtn else strings.copyCodeBtn)
                         }
                     }
 
@@ -305,21 +305,23 @@ VeoRetrofitClient.downloadGeneratedVideo(operation, BuildConfig.GEMINI_API_KEY, 
                         )
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.background,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = if (showKotlinCode) kotlinCodeSnippet else jsCodeSnippet,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(14.dp)
-                        )
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.background,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = if (showKotlinCode) kotlinCodeSnippet else jsCodeSnippet,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(14.dp)
+                            )
+                        }
                     }
                 }
             }
