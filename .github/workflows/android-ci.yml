@@ -1,0 +1,107 @@
+name: Android CI & APK Build
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Test Veo Dialogue Studio
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
+      - name: Configure .env for Secrets Gradle Plugin
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -n "$GEMINI_API_KEY" ]; then
+            echo "GEMINI_API_KEY=$GEMINI_API_KEY" > .env
+          else
+            cp .env.example .env
+          fi
+
+      - name: Ensure debug.keystore Exists
+        run: |
+          if [ ! -f "debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Run Unit & Robolectric Tests
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew :app:testDebugUnitTest
+          else
+            gradle :app:testDebugUnitTest
+          fi
+
+      - name: Build Debug APK
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew :app:assembleDebug
+          else
+            gradle :app:assembleDebug
+          fi
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: veo-dialogue-studio-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Build Signed Release APK & Bundle (Optional)
+        if: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.STORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          if [ -f "./gradlew" ]; then
+            ./gradlew :app:assembleRelease :app:bundleRelease
+          else
+            gradle :app:assembleRelease :app:bundleRelease
+          fi
+
+      - name: Upload Release Artifacts
+        if: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.STORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veo-dialogue-studio-release
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
